@@ -1,0 +1,10 @@
+@import "tailwindcss";
+
+/* Ta linijka mówi Tailwindowi v4: "używaj wariantu dark:, gdy jakikolwiek element nadrzędny ma klasę .dark" */
+@custom-variant dark (&:is(.dark *)); 
+
+/* Ewentualny fallback dla całego tła, żeby uniknąć mignięć */
+html.dark {
+  background-color: #09090b;
+  color-scheme: dark;
+}
