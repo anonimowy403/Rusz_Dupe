@@ -54,18 +54,18 @@ export default function PinnedWidgets({
                      <div className="h-full transition-all duration-300" style={{ width: `${pCent}%`, backgroundColor: getHexColor(currentTracker.color) }} />
                  </div>
 
-                 <div className="flex items-center gap-1 shrink-0 ml-2">
-                     {isTime ? (
-                         <button onClick={() => toggleTimer(currentTracker.id)} className="w-12 h-9 rounded-lg text-white font-black text-sm shadow-sm" style={{ backgroundColor: getHexColor(currentTracker.color) }}>
-                            {isTimerActive ? '||' : '▶'}
-                         </button>
-                     ) : (
-                         <>
-                           <button onClick={() => updateTrackerValue(currentTracker.id, 'quantity', -1)} className="w-10 h-9 rounded-lg bg-gray-200 dark:bg-zinc-800 text-gray-600 dark:text-zinc-300 font-bold text-xl flex items-center justify-center leading-none pb-1 transition-transform active:scale-95">–</button>
-                           <button onClick={() => updateTrackerValue(currentTracker.id, 'quantity', 1)} className="w-12 h-9 rounded-lg text-white font-black text-xl flex items-center justify-center leading-none shadow-sm transition-transform active:scale-95" style={{ backgroundColor: getHexColor(currentTracker.color) }}>+</button>
-                         </>
-                     )}
-                 </div>
+                     <div className="flex items-center gap-1 shrink-0 ml-2">
+                        {isTime ? (
+                           <button onClick={() => toggleTimer(todayStr, currentTracker.id)} className="w-12 h-9 rounded-lg text-white font-black text-sm shadow-sm" style={{ backgroundColor: getHexColor(currentTracker.color) }}>
+                              {isTimerActive ? '||' : '▶'}
+                           </button>
+                        ) : (
+                           <>
+                              <button onClick={() => updateTrackerValue(todayStr, currentTracker.id, 'quantity', -1)} className="w-10 h-9 rounded-lg bg-gray-200 dark:bg-zinc-800 text-gray-600 dark:text-zinc-300 font-bold text-xl flex items-center justify-center leading-none pb-1 transition-transform active:scale-95">−</button>
+                              <button onClick={() => updateTrackerValue(todayStr, currentTracker.id, 'quantity', 1)} className="w-12 h-9 rounded-lg text-white font-black text-xl flex items-center justify-center leading-none shadow-sm transition-transform active:scale-95" style={{ backgroundColor: getHexColor(currentTracker.color) }}>+</button>
+                           </>
+                        )}
+                     </div>
              </div>
           </div>
 
@@ -107,18 +107,18 @@ export default function PinnedWidgets({
                   </div>
                </div>
                <div className="flex flex-col items-center gap-1.5 h-full justify-center pb-1">
-                  <button onClick={() => togglePin(tracker.id)} className="text-gray-400 hover:text-red-500 text-xl leading-none self-end mb-1 transition-colors" title="Odepnij">✕</button>
-                  {isTime ? (
-                     <button onClick={() => toggleTimer(tracker.id)} className="w-12 h-12 rounded-full flex items-center justify-center text-white shadow-lg active:scale-95 transition-transform" style={{ backgroundColor: getHexColor(tracker.color) }}>
-                        {isTimerActive ? <span className="font-black text-lg">||</span> : <span className="font-black text-lg ml-1">▶</span>}
-                     </button>
-                  ) : (
-                     <div className="flex flex-col items-center gap-1.5">
-                        <button onClick={() => updateTrackerValue(tracker.id, 'quantity', -1)} className="w-8 h-8 rounded-full bg-gray-200 dark:bg-zinc-800 text-gray-600 dark:text-zinc-300 flex items-center justify-center font-bold text-lg active:scale-95 transition-transform pb-1">–</button>
-                        <button onClick={() => updateTrackerValue(tracker.id, 'quantity', 1)} className="w-12 h-12 rounded-full text-white flex items-center justify-center font-black text-2xl shadow-lg active:scale-95 transition-transform" style={{ backgroundColor: getHexColor(tracker.color) }}>+</button>
-                     </div>
-                  )}
-               </div>
+                   <button onClick={() => togglePin(tracker.id)} className="text-gray-400 hover:text-red-500 text-xl leading-none self-end mb-1 transition-colors" title="Odepnij">×</button>
+                   {isTime ? (
+                      <button onClick={() => toggleTimer(todayStr, tracker.id)} className="w-12 h-12 rounded-full flex items-center justify-center text-white shadow-lg active:scale-95 transition-transform" style={{ backgroundColor: getHexColor(tracker.color) }}>
+                         {isTimerActive ? <span className="font-black text-lg">||</span> : <span className="font-black text-lg ml-1">▶</span>}
+                      </button>
+                   ) : (
+                      <div className="flex flex-col items-center gap-1.5">
+                         <button onClick={() => updateTrackerValue(todayStr, tracker.id, 'quantity', -1)} className="w-8 h-8 rounded-full bg-gray-200 dark:bg-zinc-800 text-gray-600 dark:text-zinc-300 flex items-center justify-center font-bold text-lg active:scale-95 transition-transform pb-1">−</button>
+                         <button onClick={() => updateTrackerValue(todayStr, tracker.id, 'quantity', 1)} className="w-12 h-12 rounded-full text-white flex items-center justify-center font-black text-2xl shadow-lg active:scale-95 transition-transform" style={{ backgroundColor: getHexColor(tracker.color) }}>+</button>
+                      </div>
+                   )}
+                </div>
             </div>
           )
        })}

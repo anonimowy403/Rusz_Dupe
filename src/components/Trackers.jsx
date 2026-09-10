@@ -182,6 +182,16 @@ export default function Trackers({
                     </div>
                   </div>
                   
+                  {isTime && (
+                    <div className="mb-4 flex items-center gap-2 flex-wrap">
+                      <span className="text-xs font-bold text-gray-500 dark:text-zinc-400 uppercase tracking-wider mr-2">Korekta czasu (dziś):</span>
+                      <button onClick={() => updateTrackerValue(trackerDate, tracker.id, 'timeSpent', -60)} className="px-2 py-1 bg-gray-200 dark:bg-zinc-800 hover:bg-red-100 dark:hover:bg-red-900/30 text-gray-600 dark:text-zinc-300 hover:text-red-600 dark:hover:text-red-400 font-bold rounded text-xs transition-colors">-1m</button>
+                      <button onClick={() => updateTrackerValue(trackerDate, tracker.id, 'timeSpent', -300)} className="px-2 py-1 bg-gray-200 dark:bg-zinc-800 hover:bg-red-100 dark:hover:bg-red-900/30 text-gray-600 dark:text-zinc-300 hover:text-red-600 dark:hover:text-red-400 font-bold rounded text-xs transition-colors">-5m</button>
+                      <button onClick={() => updateTrackerValue(trackerDate, tracker.id, 'timeSpent', 60)} className="px-2 py-1 bg-gray-200 dark:bg-zinc-800 hover:bg-green-100 dark:hover:bg-green-900/30 text-gray-600 dark:text-zinc-300 hover:text-green-600 dark:hover:text-green-400 font-bold rounded text-xs transition-colors">+1m</button>
+                      <button onClick={() => updateTrackerValue(trackerDate, tracker.id, 'timeSpent', 300)} className="px-2 py-1 bg-gray-200 dark:bg-zinc-800 hover:bg-green-100 dark:hover:bg-green-900/30 text-gray-600 dark:text-zinc-300 hover:text-green-600 dark:hover:text-green-400 font-bold rounded text-xs transition-colors">+5m</button>
+                    </div>
+                  )}
+                  
                   <div className="flex justify-between items-end h-28 gap-1 md:gap-2 mt-4 w-full">
                     {getPast7Days(trackerDate).map((dayStr) => {
                        const pastVals = getTrackerValueObj(dayStr, tracker.id);

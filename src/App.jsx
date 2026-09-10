@@ -7,9 +7,9 @@ import Trackers from './components/Trackers';
 import PinnedWidgets from './components/PinnedWidgets';
 
 const DEFAULT_HOTKEYS = {
-  newTask: 'n', toggleTab: 't', viewList: 'z', viewWeek: 'x', viewMonth: 'c',
+  newTask: 'n', toggleTab: 't', viewList: 'z', viewWeek: 'x', viewMonth: 'c', viewKanban: 'v',
   filterAll: 'q', filterToday: 'w', filterWeek: 'e', filterNone: 'r'
-};
+}
 
 export default function App() {
   const [data, setData] = useState(() => {
@@ -84,52 +84,27 @@ export default function App() {
     return () => window.removeEventListener('beforeunload', handleUnload);
   }, []);
 
-  // System tickania na żywo dla Timera i automatyczny zapis do stae
+// System tickania na żywo dla Timera i automatyczny zapis do state
   useEffect(() => {
     let int;
     if (activeTimer) {
-      int = setInterval(() => { 
-        const now = Date.now();
-        setNowTick(now); 
-        
-        // Co sekundę robimy cichy zapis do state (aby zapobiec utracie po odświeżeniu/zmianie modulu)
-        setActiveTimer(current => {
-           if (!current) return null;
-           const sessionSecs = Math.floor((now - current.start) / 1000);
-           if (sessionSecs > 0) {
-             setData(prev => {
-                const r = prev.trackerLogs?.[current.dateStr]?.[current.id];
-                const cObj = (r && typeof r === 'object') ? r : { quantity: typeof r === 'number' ? r : 0, timeSpent: 0 };
-                return {
-                  ...prev,
-                  settings: { ...prev.settings, activeTimer: { ...current, start: now } },
-                  trackerLogs: {
-                    ...prev.trackerLogs,
-                    [current.dateStr]: {
-                      ...(prev.trackerLogs[current.dateStr] || {}),
-                      [current.id]: { ...cObj, timeSpent: cObj.timeSpent + sessionSecs }
-                    }
-                  }
-                };
-             });
-             return { ...current, start: now };
-           }
-           return current;
-        });
+      int = setInterval(() => {
+         setNowTick(Date.now());
       }, 1000);
     }
     return () => clearInterval(int);
   }, [activeTimer]);
 
-  useEffect(() => {
+useEffect(() => {
     if (activeTimer && !activeTimer.alarmed) {
        const tracker = data.trackers.find(t => t.id === activeTimer.id);
        if (tracker) {
           const targetSeconds = (tracker.goalTime || 30) * 60;
           const r = data.trackerLogs?.[activeTimer.dateStr]?.[activeTimer.id];
           const currentTotal = (r && typeof r === 'object') ? r.timeSpent : 0;
-
-          if (currentTotal >= targetSeconds) {
+          const sessionSecs = Math.floor((nowTick - activeTimer.start) / 1000);
+          
+          if (currentTotal + sessionSecs >= targetSeconds) {
              playBeep();
              setActiveTimer(p => {
                 if(!p) return null;
@@ -216,16 +191,32 @@ export default function App() {
     });
   };
 
-  const toggleTimer = (dateStr, trackerId) => {
+const toggleTimer = (dateStr, trackerId) => {
     setData(prevData => {
        const prevTimer = prevData.settings?.activeTimer;
-
        if (prevTimer?.id === trackerId && prevTimer?.dateStr === dateStr) {
+           // WYŁĄCZENIE TIMERA I ZAPIS CZASU DO STANU
+           const sessionSecs = Math.floor((Date.now() - prevTimer.start) / 1000);
+           const currentLogsForDate = prevData.trackerLogs[dateStr] || {};
+           const cObj = currentLogsForDate[trackerId] || { quantity: 0, timeSpent: 0 };
+           
            setActiveTimer(null);
-           return { ...prevData, settings: { ...prevData.settings, activeTimer: null } };
+           return { 
+             ...prevData, 
+             settings: { ...prevData.settings, activeTimer: null },
+             trackerLogs: {
+               ...prevData.trackerLogs,
+               [dateStr]: {
+                 ...currentLogsForDate,
+                 [trackerId]: { ...cObj, timeSpent: cObj.timeSpent + sessionSecs }
+               }
+             }
+           };
        } else {
-           const currentTargetObj = getTrackerValueObj(dateStr, trackerId);
-           const accum = currentTargetObj.timeSpent || 0;
+           // WŁĄCZENIE TIMERA
+           const currentLogsForDate = prevData.trackerLogs[dateStr] || {};
+           const cObj = currentLogsForDate[trackerId] || { quantity: 0, timeSpent: 0 };
+           const accum = cObj.timeSpent || 0;
            
            const newTimer = { id: trackerId, start: Date.now(), accum, alarmed: false, dateStr };
            setActiveTimer(newTimer);

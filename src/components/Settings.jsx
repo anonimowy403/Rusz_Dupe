@@ -107,6 +107,7 @@ export default function Settings({
               <label className="block text-xs font-bold text-gray-500 dark:text-zinc-400 mb-3 uppercase tracking-wider">Domyślny Widok Startowy</label>
               <div className="flex flex-col gap-2">
                 <button onClick={() => updateSetting('defaultStartupView', 'list-all')} className={`w-full text-left px-4 py-2 rounded-lg text-sm font-medium transition-colors ${data.settings.defaultStartupView === 'list-all' ? 'bg-orange-50 dark:bg-orange-500/10 border border-orange-500 text-orange-600 dark:text-orange-400' : 'bg-gray-50 dark:bg-zinc-950 border border-gray-200 dark:border-zinc-800 text-gray-700 dark:text-zinc-300'}`}>Lista: Wszystkie</button>
+                <button onClick={() => updateSetting('defaultStartupView', 'kanban')} className={`w-full text-left px-4 py-2 rounded-lg text-sm font-medium transition-colors ${data.settings.defaultStartupView === 'kanban' ? 'bg-orange-50 dark:bg-orange-500/10 border border-orange-500 text-orange-600 dark:text-orange-400' : 'bg-gray-50 dark:bg-zinc-950 border border-gray-200 dark:border-zinc-800 text-gray-700 dark:text-zinc-300'}`}>Tablica Kanban</button>
                 <button onClick={() => updateSetting('defaultStartupView', 'list-today')} className={`w-full text-left px-4 py-2 rounded-lg text-sm font-medium transition-colors ${data.settings.defaultStartupView === 'list-today' ? 'bg-orange-50 dark:bg-orange-500/10 border border-orange-500 text-orange-600 dark:text-orange-400' : 'bg-gray-50 dark:bg-zinc-950 border border-gray-200 dark:border-zinc-800 text-gray-700 dark:text-zinc-300'}`}>Lista: Dzisiaj</button>
                 <button onClick={() => updateSetting('defaultStartupView', 'list-week')} className={`w-full text-left px-4 py-2 rounded-lg text-sm font-medium transition-colors ${data.settings.defaultStartupView === 'list-week' ? 'bg-orange-50 dark:bg-orange-500/10 border border-orange-500 text-orange-600 dark:text-orange-400' : 'bg-gray-50 dark:bg-zinc-950 border border-gray-200 dark:border-zinc-800 text-gray-700 dark:text-zinc-300'}`}>Lista: W tym tygodniu</button>
                 <button onClick={() => updateSetting('defaultStartupView', 'gantt')} className={`w-full text-left px-4 py-2 rounded-lg text-sm font-medium transition-colors ${data.settings.defaultStartupView === 'gantt' ? 'bg-orange-50 dark:bg-orange-500/10 border border-orange-500 text-orange-600 dark:text-orange-400' : 'bg-gray-50 dark:bg-zinc-950 border border-gray-200 dark:border-zinc-800 text-gray-700 dark:text-zinc-300'}`}>Harmonogram</button>
@@ -187,6 +188,7 @@ export default function Settings({
                   { key: 'filterWeek', label: 'Filtr: W tym tygodniu' },
                   { key: 'filterNone', label: 'Wyczyść filtry kategorii' },
                   { key: 'viewList', label: 'Widok Listy' },
+                  { key: 'viewKanban', label: 'Tablica Kanban' },
                   { key: 'viewWeek', label: 'Harmonogram' },
                   { key: 'viewMonth', label: 'Kalendarz' }
                 ].map(hotkey => (

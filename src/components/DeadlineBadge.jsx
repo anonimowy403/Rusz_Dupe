@@ -21,7 +21,10 @@ export const DeadlineBadge = ({ deadline, isSmall = false, format = 'countdown-h
 
   return (
     <span className={`${isSmall ? 'text-[10px] px-1.5 py-0.5' : 'text-[11px] px-2 py-0.5'} font-mono rounded whitespace-nowrap ml-2 ${isOverdue ? 'bg-red-100 dark:bg-red-900/40 text-red-600 dark:text-red-400 font-bold blink-overdue' : 'bg-gray-200 dark:bg-zinc-800 text-gray-600 dark:text-zinc-400'}`}>
-      {format === 'datetime' ? text : (isOverdue ? `Spóźnione: ${text}` : `Pozostało: ${text}`)}
+      {/* 5. USUNIĘCIE SŁOWA "POZOSTAŁO": 
+          Teraz dla normalnych zadań wyświetla się sam czas (zmienna `text`).
+          Dla spóźnionych zostawiamy napis "Spóźnione: ", aby przyciągnąć uwagę. */}
+      {format === 'datetime' ? text : (isOverdue ? `Spóźnione: ${text}` : text)}
     </span>
   );
 };

@@ -10,11 +10,38 @@ for (let i = 0; i < 24; i++) {
   }
 }
 
-export default function Tasks({ 
+// Odchaczenie taska dźwięk
+
+// Załadowanie dźwięków do pamięci od razu przy starcie (brak opóźnień)
+const taskSound = new Audio('/task-done.mp3');
+const nukeSound = new Audio('/nuke-done.mp3');
+
+const playTaskSound = () => {
+  try { 
+    taskSound.currentTime = 0; // Cofnięcie do początku, na wypadek szybkiego "przeklikiwania"
+    taskSound.play(); 
+  } catch (e) {}
+};
+
+const playNukeSound = () => {
+  try { 
+    nukeSound.currentTime = 0; 
+    nukeSound.play(); 
+  } catch (e) {}
+};
+
+export default function Tasks({
   data, setData, isMobile, todayStr, eowStr, openCategorySettings,
   isAppMenuOpen, isCategoryMenuOpen, DEFAULT_HOTKEYS 
 }) {
-  const [taskView, setTaskView] = useState(() => data.settings.defaultStartupView === 'gantt' ? 'week' : (data.settings.defaultStartupView === 'month' ? 'month' : 'list')); 
+  const [taskView, setTaskView] = useState(() => {
+    // Odczytujemy ustawienie domyślne. Jeśli to kanban, gantt lub kalendarz - ustawiamy je. W przeciwnym razie lista.
+    const view = data.settings.defaultStartupView;
+    if (view === 'kanban') return 'kanban';
+    if (view === 'gantt') return 'week';
+    if (view === 'month') return 'month';
+    return 'list';
+  });
   const [activeDateFilter, setActiveDateFilter] = useState(() => data.settings.defaultStartupView === 'list-all' ? 'all' : (data.settings.defaultStartupView === 'list-week' ? 'week' : 'today')); 
   const [activeCategoryFilter, setActiveCategoryFilter] = useState(null); 
   const [expandedTaskId, setExpandedTaskId] = useState(null);
@@ -47,6 +74,7 @@ export default function Tasks({
   const [addingSubtaskId, setAddingSubtaskId] = useState(null);
   const [subtaskInput, setSubtaskInput] = useState({ title: '', deadlineDate: '', deadlineTime: '' });
   const [draggedTaskId, setDraggedTaskId] = useState(null);
+  const [explodingTasks, setExplodingTasks] = useState({});
 
   const scrollRef = useRef(null);
   const scheduleScrollRef = useRef(null);
@@ -68,9 +96,12 @@ export default function Tasks({
       if (isAppMenuOpen || isCategoryMenuOpen || isAddingTask || focusedTaskId) return;
 
       if (taskView === 'week') {
-         const scrollStep = isMobile ? 296 : 316; 
-         if (e.key === 'ArrowLeft') { e.preventDefault(); scheduleScrollRef.current?.scrollBy({ left: -scrollStep, behavior: 'smooth' }); setWeekOffset(p => p - 1); return; }
-         if (e.key === 'ArrowRight') { e.preventDefault(); scheduleScrollRef.current?.scrollBy({ left: scrollStep, behavior: 'smooth' }); setWeekOffset(p => p + 1); return; }
+          if (e.key === 'ArrowLeft') { e.preventDefault(); setWeekOffset(p => p - 1); return; }
+          if (e.key === 'ArrowRight') { e.preventDefault(); setWeekOffset(p => p + 1); return; }
+       }
+       if (taskView === 'month') {
+          if (e.key === 'ArrowLeft') { e.preventDefault(); setCalendarMonthOffset(p => p - 1); return; }
+          if (e.key === 'ArrowRight') { e.preventDefault(); setCalendarMonthOffset(p => p + 1); return; }
       }
 
       const hk = data.settings.hotkeys || DEFAULT_HOTKEYS;
@@ -78,6 +109,7 @@ export default function Tasks({
 
       if (key === hk.newTask) { e.preventDefault(); openAddTask(); }
       if (key === hk.viewList) { e.preventDefault(); setTaskView('list'); }
+      if (key === hk.viewKanban) { e.preventDefault(); setTaskView('kanban'); }
       if (key === hk.viewWeek) { e.preventDefault(); setTaskView('week'); }
       if (key === hk.viewMonth) { e.preventDefault(); setTaskView('month'); }
       
@@ -174,8 +206,26 @@ export default function Tasks({
       const idx = newTasks.findIndex(t => t.id === id);
       if (idx === -1) return prev;
 
-      const task = { ...newTasks[idx] };
+  const task = { ...newTasks[idx] };
       const willBeDone = !task.isDone;
+      
+      if (willBeDone) {
+         const type = task.isPriority ? 'nuke' : 'normal';
+         setExplodingTasks(prev => ({ ...prev, [task.id]: type }));
+         
+         if (type === 'nuke') playNukeSound();
+         else playTaskSound();
+         
+         // Zwiększyliśmy czas dla atomówki do 3 sekund, aby film miał czas wybrzmieć. 
+         // Zmień tę wartość (3000), jeśli Twój filmik jest dłuższy/krótszy.
+         setTimeout(() => {
+           setExplodingTasks(prev => {
+             const newObj = { ...prev };
+             delete newObj[task.id];
+             return newObj;
+           });
+         }, type === 'nuke' ? 3000 : 600);
+      }
 
       if (willBeDone && task.repeat && task.repeat !== 'none') {
         let shouldRepeat = true;
@@ -237,7 +287,32 @@ export default function Tasks({
     setData(prev => ({ ...prev, tasks: prev.tasks.map(t => t.id === taskId ? { ...t, subtasks: [...(t.subtasks || []), { id: crypto.randomUUID(), title: subtaskInput.title, isDone: false, deadline: finalDeadline }] } : t) }));
     setSubtaskInput({ title: '', deadlineDate: '', deadlineTime: '' }); setAddingSubtaskId(null);
   };
-  const toggleSubtask = (taskId, subtaskId) => setData(prev => ({ ...prev, tasks: prev.tasks.map(t => t.id === taskId ? { ...t, subtasks: (t.subtasks || []).map(st => st.id === subtaskId ? { ...st, isDone: !st.isDone } : st) } : t) }));
+  const toggleSubtask = (taskId, subtaskId) => {
+    setData(prev => {
+      const task = prev.tasks.find(t => t.id === taskId);
+      const subtask = task?.subtasks?.find(st => st.id === subtaskId);
+      
+      if (subtask && !subtask.isDone) {
+         setExplodingTasks(prevExp => ({ ...prevExp, [subtaskId]: 'normal' }));
+         playTaskSound();
+         setTimeout(() => {
+           setExplodingTasks(prevExp => {
+             const newObj = { ...prevExp };
+             delete newObj[subtaskId];
+             return newObj;
+           });
+         }, 600);
+      }
+
+      return {
+        ...prev,
+        tasks: prev.tasks.map(t => t.id === taskId ? {
+          ...t,
+          subtasks: (t.subtasks || []).map(st => st.id === subtaskId ? { ...st, isDone: !st.isDone } : st)
+        } : t)
+      };
+    });
+  };
   const deleteSubtask = (taskId, subtaskId) => setData(prev => ({ ...prev, tasks: prev.tasks.map(t => t.id === taskId ? { ...t, subtasks: (t.subtasks || []).filter(st => st.id !== subtaskId) } : t) }));
   const updateSubtaskField = (taskId, subtaskId, field, value) => {
     setData(prev => ({
@@ -263,6 +338,17 @@ export default function Tasks({
       return { ...prev, tasks: newTasks };
     });
     setDraggedTaskId(null);
+  };
+
+  // Funkcja obsługująca upuszczenie zadania na konkretną kolumnę w widoku Kanban
+  const handleKanbanColumnDrop = (e, targetCategoryId) => {
+    e.preventDefault(); // Przeglądarka musi wiedzieć, że pozwalamy tu upuścić element
+    if (!draggedTaskId) return; // Jeśli nic nie przeciągamy, anuluj
+    
+    // Używamy gotowej funkcji updateTaskField aby nadpisać categoryId
+    // na ID kategorii reprezentowanej przez kolumnę.
+    updateTaskField(draggedTaskId, 'categoryId', targetCategoryId);
+    setDraggedTaskId(null); // Resetujemy stan przeciągania
   };
 
   const visibleCategories = data.categories.filter(c => c.isVisible !== false);
@@ -302,38 +388,60 @@ export default function Tasks({
     const tStrLocal = tDateObj ? `${String(tDateObj.getHours()).padStart(2,'0')}:${String(tDateObj.getMinutes()).padStart(2,'0')}` : '';
 
     return (
-      <div key={task.id} draggable={taskView === 'list' && !isModalView && !task.isPriority} onDragStart={(e) => { if(taskView === 'list' && !isModalView && !task.isPriority){ setDraggedTaskId(task.id); e.dataTransfer.effectAllowed = "move";} }} onDragEnd={handleDragEnd} onDragOver={(e) => e.preventDefault()} onDrop={(e) => handleDrop(e, task.id)} 
-           onClick={(e) => { 
-             e.stopPropagation(); 
-             if (!isModalView) {
-               if (data.settings.taskClickBehavior === 'modal' && taskView === 'list') {
-                 setFocusedTaskId(task.id); 
-               } else {
-                 setExpandedTaskId(isExpanded ? null : task.id); 
-                 if (!isExpanded) setExpandedCalendarTaskId(null); // Reset calendar when closing
+      <div key={task.id} 
+              // 1. ZEZWOLENIE NA DRAG & DROP W KANBANIE:
+              // Dodaliśmy taskView === 'kanban' do warunków draggable i onDragStart.
+              draggable={(taskView === 'list' || taskView === 'kanban') && !isModalView && !task.isPriority} 
+              onDragStart={(e) => { 
+                if((taskView === 'list' || taskView === 'kanban') && !isModalView && !task.isPriority){ 
+                  setDraggedTaskId(task.id); 
+                  e.dataTransfer.effectAllowed = "move";
+                } 
+              }} 
+              onDragEnd={handleDragEnd} 
+              onDragOver={(e) => e.preventDefault()} 
+              onDrop={(e) => handleDrop(e, task.id)}
+              onClick={(e) => {
+                e.stopPropagation();
+                if (!isModalView) {
+                 // 2. WYMUSZENIE WIDOKU MODAL (KARTY) DLA KANBANA:
+                 // Jeśli jesteśmy w widoku Kanban, zawszę otwieramy pełną kartę (setFocusedTaskId).
+                 // Zapobiega to psuciu układu kolumn przez rozwijające się w pionie zadania.
+                 if (taskView === 'kanban' || (data.settings.taskClickBehavior === 'modal' && taskView === 'list')) {
+                   setFocusedTaskId(task.id);
+                  } else {
+                   setExpandedTaskId(isExpanded ? null : task.id);
+                    if (!isExpanded) setExpandedCalendarTaskId(null);
+                 }
                }
-             }
-           }} 
-           className={`relative overflow-hidden rounded-xl border transition-all ${(taskView === 'list' && !isModalView && !task.isPriority) ? 'cursor-grab active:cursor-grabbing' : ''} ${isDragged ? 'opacity-40 scale-[0.99]' : 'opacity-100'} ${cardBgClass} shadow-sm hover:shadow h-max`}>
-        
-        {!task.isDone && task.isPriority && ( <div className="absolute inset-0 pointer-events-none z-0" style={{ background: `linear-gradient(to top, ${categoryColor}15, transparent)` }} /> )}
-        {!task.isPriority && ( <div className={`absolute left-0 top-0 bottom-0 w-1.5 ${task.isDone ? 'opacity-30' : 'opacity-100'} z-10`} style={{ backgroundColor: categoryColor }} /> )}
+             }}
+              className={`relative overflow-hidden rounded-xl border transition-all ${((taskView === 'list' || taskView === 'kanban') && !isModalView && !task.isPriority) ? 'cursor-grab active:cursor-grabbing' : ''} ${isDragged ? 'opacity-40 scale-[0.99]' : 'opacity-100'} ${cardBgClass} shadow-sm hover:shadow h-max`}>
+                  
+                  {/* Efekt Hitmarkera dla głównego zadania */}
+                  {explodingTasks[task.id] === 'normal' && (
+                     <div className="absolute inset-0 m-auto pointer-events-none z-50 w-16 h-16 flex items-center justify-center">
+                        <video src="/hitmarker.webm" autoPlay muted playsInline className="w-full h-full object-contain mix-blend-screen" />
+                     </div>
+                  )}
+
+                  {!task.isDone && task.isPriority && ( <div className="absolute inset-0 pointer-events-none z-0" style={{ background: `linear-gradient(to top, ${categoryColor}15, transparent)` }} /> )}
 
         <div className="p-3 pl-4 relative z-10 flex flex-col gap-1.5">
           <div className="flex justify-between items-start gap-2">
-            <div className="flex items-center gap-2.5 flex-1 min-w-0" onClick={e => e.stopPropagation()}>
-              <input type="checkbox" checked={task.isDone} onChange={(e) => toggleTask(e, task.id)} className="w-5 h-5 accent-orange-500 rounded border-gray-300 dark:border-zinc-700 cursor-pointer shrink-0"/>
+            <div className="flex items-center gap-2.5 flex-1 min-w-0">
+              <input type="checkbox" checked={task.isDone} onClick={e => e.stopPropagation()} onChange={(e) => toggleTask(e, task.id)} className="w-5 h-5 accent-orange-500 rounded border-gray-300 dark:border-zinc-700 cursor-pointer shrink-0"/>
               {isExpanded && !task.isDone ? (
-                 <input 
-                   type="text" value={task.title} 
-                   onChange={(e) => updateTaskField(task.id, 'title', e.target.value)}
-                   className={`bg-transparent outline-none border-b border-transparent focus:border-orange-500 flex-1 min-w-0 truncate ${task.isPriority ? 'font-black' : 'font-medium'} ${task.isDone ? 'line-through text-gray-400' : 'text-gray-900 dark:text-zinc-200'}`}
-                   style={{ color: (!task.isDone && task.isPriority) ? categoryColor : undefined }}
-                 />
+                <input
+                    type="text" value={task.title}
+                    onClick={e => e.stopPropagation()}
+                    onChange={(e) => updateTaskField(task.id, 'title', e.target.value)}
+                    className={`bg-transparent outline-none border-b border-transparent focus:border-orange-500 flex-1 min-w-0 truncate ${task.isPriority ? 'font-black' : 'font-medium'} ${task.isDone ? 'line-through text-gray-400' : 'text-gray-900 dark:text-zinc-200'}`}
+                    style={{ color: (!task.isDone && task.isPriority) ? categoryColor : undefined }}
+                  />
               ) : (
-                 <p className={`text-base truncate ${task.isPriority ? 'font-black' : 'font-medium'} ${task.isDone ? 'line-through text-gray-400 dark:text-zinc-600' : 'text-gray-900 dark:text-zinc-200'}`} style={{ color: (!task.isDone && task.isPriority) ? categoryColor : undefined }}>
-                   {task.title}
-                 </p>
+                <p className={`text-base truncate ${task.isPriority ? 'font-black' : 'font-medium'} ${task.isDone ? 'line-through text-gray-400 dark:text-zinc-600' : 'text-gray-900 dark:text-zinc-200'}`} style={{ color: (!task.isDone && task.isPriority) ? categoryColor : undefined }}>
+                  {task.title}
+                </p>
               )}
             </div>
             
@@ -368,8 +476,14 @@ export default function Tasks({
                {inlineExpandedSubtasks.includes(task.id) && (
                  <div className="flex flex-col gap-1 mt-1 pl-2 border-l-2 border-gray-200 dark:border-zinc-700 w-full">
                     {task.subtasks.map(sub => (
-                      <div key={sub.id} className="flex items-center gap-2 py-0.5" onClick={e => e.stopPropagation()}>
-                         <input type="checkbox" checked={sub.isDone} onChange={() => toggleSubtask(task.id, sub.id)} className="w-3.5 h-3.5 accent-orange-500 cursor-pointer shrink-0"/>
+                      <div key={sub.id} className="relative flex items-center gap-2 py-0.5" onClick={e => e.stopPropagation()}>
+                         {/* Efekt Hitmarkera dla mini podglądu subtaska */}
+                         {explodingTasks[sub.id] === 'normal' && (
+                           <div className="absolute -left-2 top-1/2 -translate-y-1/2 pointer-events-none z-50 w-8 h-8 flex items-center justify-center">
+                             <video src="/hitmarker.webm" autoPlay muted playsInline className="w-full h-full object-contain mix-blend-screen" />
+                           </div>
+                         )}
+                         <input type="checkbox" checked={sub.isDone} onChange={() => toggleSubtask(task.id, sub.id)} className="w-3.5 h-3.5 accent-orange-500 cursor-pointer shrink-0 relative z-10"/>
                          <span className={`text-xs truncate ${sub.isDone ? 'line-through text-gray-400 dark:text-zinc-600' : 'text-gray-600 dark:text-zinc-300'}`}>{sub.title}</span>
                       </div>
                     ))}
@@ -429,9 +543,15 @@ export default function Tasks({
 
               {/* Edytowalne Subtaski */}
               <div className="space-y-1 mb-2 border-l-2 border-gray-100 dark:border-zinc-800/80 pl-3">
-                {(task.subtasks || []).map(sub => (
-                  <div key={sub.id} className="flex items-center flex-wrap gap-2 hover:bg-gray-50 dark:hover:bg-zinc-950/50 p-1.5 -ml-1.5 rounded">
-                    <input type="checkbox" checked={sub.isDone} onChange={() => toggleSubtask(task.id, sub.id)} className="w-4 h-4 accent-orange-500 rounded cursor-pointer shrink-0"/>
+                  {(task.subtasks || []).map(sub => (
+                  <div key={sub.id} className="relative flex items-center flex-wrap gap-2 hover:bg-gray-50 dark:hover:bg-zinc-950/50 p-1.5 -ml-1.5 rounded">
+                    {/* Efekt Hitmarkera dla rozwiniętego subtaska */}
+                    {explodingTasks[sub.id] === 'normal' && (
+                      <div className="absolute -left-1.5 top-1/2 -translate-y-1/2 pointer-events-none z-50 w-10 h-10 flex items-center justify-center">
+                        <video src="/hitmarker.webm" autoPlay muted playsInline className="w-full h-full object-contain mix-blend-screen" />
+                      </div>
+                    )}
+                    <input type="checkbox" checked={sub.isDone} onChange={() => toggleSubtask(task.id, sub.id)} className="w-4 h-4 accent-orange-500 rounded cursor-pointer shrink-0 relative z-10"/>
                     {!task.isDone ? (
                         <input type="text" value={sub.title} onChange={(e) => updateSubtaskField(task.id, sub.id, 'title', e.target.value)} className={`bg-transparent outline-none border-b border-transparent focus:border-orange-500 flex-1 text-sm ${sub.isDone ? 'line-through text-gray-400' : 'text-gray-700 dark:text-zinc-300'}`} />
                     ) : (
@@ -499,7 +619,7 @@ export default function Tasks({
   const renderListTaskView = () => {
     const isFullWidth = data.settings.layoutWidth === 'full' && !isMobile;
     const gridClass = isFullWidth ? "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 content-start space-y-0" : "space-y-3";
-    return (
+return (
       <div className={`flex-1 overflow-y-auto py-2 pb-32 pr-2 hide-scroll ${gridClass}`}>
         {baseFilteredTasks.length === 0 && (
           <div className="text-center mt-20 col-span-full">
@@ -512,17 +632,72 @@ export default function Tasks({
     );
   };
 
+  // Nowy widok: Tablica Kanban (Kolumny to Kategorie)
+  const renderKanbanTaskView = () => {
+    // Dodajemy "kolumnę zastępczą" dla zadań bez przypisanej kategorii
+    const kanbanColumns = [
+      ...visibleCategories, 
+      { id: null, name: 'Brak kategorii', color: '#9ca3af' }
+    ];
+
+    return (
+      // Dodano w-full, aby kontener zajął pełną dostępną szerokość ekranu
+      <div className="flex-1 w-full flex gap-4 overflow-x-auto hide-scroll py-2 pb-32 snap-x snap-mandatory">
+        {kanbanColumns.map(col => {
+          // Filtrujemy zadania pasujące do danej kategorii
+          const tasksInColumn = baseFilteredTasks.filter(t => t.categoryId === col.id || (col.id === null && !t.categoryId));
+          const color = getHexColor(col.color);
+
+          return (
+            <div 
+              key={col.id || 'uncategorized'} 
+              // 4. NAPRAWA SCROLLOWANIA KANBANA:
+              // Dodano `shrink-0` (odpowiednik CSS: flex-shrink: 0). Bez tego flexbox zgniatał
+              // kolumny aby zmieściły się na ekranie (więc nie pojawiał się pasek przewijania).
+              // Z `shrink-0` kolumny twardo trzymają swoją szerokość min-w-[300px], wypychając kontener.
+              className="snap-start shrink-0 min-w-[300px] max-w-[300px] flex flex-col h-full bg-gray-50 dark:bg-zinc-950 border border-gray-200 dark:border-zinc-800 rounded-2xl overflow-hidden"
+              // API HTML5 Drag&Drop: onDragOver pozwala elementowi na przyjęcie upuszczonego zadania
+              onDragOver={(e) => e.preventDefault()} 
+              // onDrop przechwytuje moment puszczenia myszki i przypisuje ID kategorii tej kolumny do zadania
+              onDrop={(e) => handleKanbanColumnDrop(e, col.id)}
+            >
+              {/* Nagłówek kolumny */}
+              <div className="p-4 border-b border-gray-200 dark:border-zinc-800 flex justify-between items-center bg-white dark:bg-zinc-900 shrink-0">
+                <div className="flex items-center gap-2">
+                  <span style={{ backgroundColor: color }} className="w-3 h-3 rounded-full shadow-sm" />
+                  <h3 className="text-sm font-black text-gray-900 dark:text-white uppercase tracking-wider">{col.name}</h3>
+                </div>
+                <span className="text-xs font-bold text-gray-400 bg-gray-100 dark:bg-zinc-800 px-2 py-1 rounded-md">{tasksInColumn.length}</span>
+              </div>
+              
+              {/* Lista zadań w kolumnie */}
+              <div className="flex-1 overflow-y-auto p-3 space-y-3 hide-scroll">
+                {tasksInColumn.length === 0 ? (
+                  <div className="h-full flex items-center justify-center">
+                    <p className="text-xs text-gray-400 dark:text-zinc-600 font-medium text-center border-2 border-dashed border-gray-200 dark:border-zinc-800 rounded-xl p-4 w-full">Przeciągnij zadania tutaj</p>
+                  </div>
+                ) : (
+                  tasksInColumn.map(t => renderTaskCard(t, false))
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    );
+  };
+
   const renderWeekTaskView = () => {
     const numDays = 14; 
     const days = generateScheduleDays(weekOffset, numDays); 
     return (
       <div className="flex-1 flex flex-col py-2 pb-24 overflow-hidden">
         <div className="flex justify-between items-center mb-4 px-2 shrink-0">
-          <button onClick={() => { scheduleScrollRef.current?.scrollBy({ left: -(isMobile ? 296 : 316), behavior: 'smooth' }); setWeekOffset(p => p - 1); }} className="px-4 py-2 hover:bg-gray-100 dark:bg-zinc-800 rounded-lg text-gray-600 dark:text-zinc-400 transition-colors font-bold">&lsaquo; Wstecz</button>
-          <button onClick={() => { scheduleScrollRef.current?.scrollTo({ left: 0, behavior: 'smooth' }); setWeekOffset(0); }} className="text-[10px] text-orange-500 font-bold uppercase hover:underline">Wróć do dziś</button>
-          <button onClick={() => { scheduleScrollRef.current?.scrollBy({ left: isMobile ? 296 : 316, behavior: 'smooth' }); setWeekOffset(p => p + 1); }} className="px-4 py-2 hover:bg-gray-100 dark:bg-zinc-800 rounded-lg text-gray-600 dark:text-zinc-400 transition-colors font-bold">Dalej &rsaquo;</button>
+          <button onClick={() => setWeekOffset(p => p - 1)} className="px-4 py-2 hover:bg-gray-100 dark:bg-zinc-800 rounded-lg text-gray-600 dark:text-zinc-400 transition-colors font-bold">&lsaquo; Wstecz</button>
+          <button onClick={() => { setWeekOffset(0); scheduleScrollRef.current?.scrollTo({ left: 0, behavior: 'smooth' }); }} className="text-[10px] text-orange-500 font-bold uppercase hover:underline">Wróć do dziś</button>
+          <button onClick={() => setWeekOffset(p => p + 1)} className="px-4 py-2 hover:bg-gray-100 dark:bg-zinc-800 rounded-lg text-gray-600 dark:text-zinc-400 transition-colors font-bold">Dalej &rsaquo;</button>
         </div>
-        <div ref={scheduleScrollRef} className="flex-1 flex gap-4 overflow-x-auto hide-scroll px-2 snap-x snap-mandatory scroll-smooth pb-4">
+        <div ref={scheduleScrollRef} className="flex-1 flex gap-4 overflow-x-auto hide-scroll px-2 snap-x snap-mandatory scroll-smooth pb-4" style={{ overflowAnchor: 'none' }}>
           {days.map(dayStr => {
             const isToday = dayStr === todayStr;
             const tasksForDay = baseFilteredTasks.filter(t => t.deadline && t.deadline.startsWith(dayStr));
@@ -614,13 +789,18 @@ export default function Tasks({
 
   return (
     <>
+      {Object.values(explodingTasks).includes('nuke') && (
+         <div className="fixed inset-0 z-[200] pointer-events-none flex items-center justify-center">
+           <video src="/nuke.webm" autoPlay muted playsInline className="w-full h-full object-cover" />
+         </div>
+      )}
       <div className="flex w-full items-center py-4 shrink-0 overflow-hidden relative">
         <div className="flex gap-2 items-center pr-4 border-r border-gray-200 dark:border-zinc-800 shrink-0 relative z-10 bg-gray-50 dark:bg-zinc-950">
           {taskView === 'list' && (
             <>
-              <FilterBtn active={activeDateFilter === 'all'} onClick={() => setActiveDateFilter('all')} icon="📋" label="Wszystko" hotkey={data.settings.hotkeys?.filterAll} />
-              <FilterBtn active={activeDateFilter === 'today'} onClick={() => setActiveDateFilter('today')} icon="🔥" label="Dziś" hotkey={data.settings.hotkeys?.filterToday} />
-              <FilterBtn active={activeDateFilter === 'week'} onClick={() => setActiveDateFilter('week')} icon="📅" label="Tyg." hotkey={data.settings.hotkeys?.filterWeek} />
+              <FilterBtn active={activeDateFilter === 'all'} onClick={() => setActiveDateFilter('all')} icon={<img src="/icon-all.svg" alt="Wszystko" className="w-5 h-5 object-contain" />} label="Wszystko" hotkey={data.settings.hotkeys?.filterAll} />
+              <FilterBtn active={activeDateFilter === 'today'} onClick={() => setActiveDateFilter('today')} icon={<img src="/icon-today.svg" alt="Dziś" className="w-5 h-5 object-contain" />} label="Dziś" hotkey={data.settings.hotkeys?.filterToday} />
+              <FilterBtn active={activeDateFilter === 'week'} onClick={() => setActiveDateFilter('week')} icon={<img src="/icon-week.svg" alt="Tydzień" className="w-5 h-5 object-contain" />} label="Tyg." hotkey={data.settings.hotkeys?.filterWeek} />
             </>
           )}
           {taskView !== 'list' && !isMobile && (
@@ -628,24 +808,32 @@ export default function Tasks({
           )}
         </div>
 
-        {isMobile ? (
-          <div className="flex-1 px-4">
-            <select 
-              value={activeCategoryFilter || 'null'} 
-              onChange={(e) => setActiveCategoryFilter(e.target.value === 'null' ? null : e.target.value)}
-              className="w-full bg-white dark:bg-zinc-900 border border-gray-300 dark:border-zinc-700 rounded-lg px-3 py-2 text-sm font-bold text-gray-700 dark:text-zinc-300 focus:outline-none focus:border-orange-500"
-            >
-              <option value="null">Wszystkie kategorie</option>
-              {visibleCategories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-            </select>
-          </div>
-        ) : (
-          <div ref={scrollRef} onMouseDown={handleCatMouseDown} onMouseLeave={handleCatMouseLeave} onMouseUp={handleCatMouseUp} onMouseMove={handleCatMouseMove} className="flex-1 flex gap-2 overflow-x-auto hide-scroll cursor-grab active:cursor-grabbing px-4">
-            {visibleCategories.map(cat => (
-              <CatFilterBtn key={cat.id} active={activeCategoryFilter === cat.id} onClick={() => setActiveCategoryFilter(activeCategoryFilter === cat.id ? null : cat.id)} color={getHexColor(cat.color)} label={cat.name} count={getTaskCount(taskView === 'list' ? activeDateFilter : 'all', cat.id)} />
-            ))}
-          </div>
+{/* 3. UKRYCIE FILTRÓW KATEGORII W WIDOKU KANBAN: 
+            Kategorie w Kanbanie to kolumny, więc dodatkowy pasek filtrów był zbędny.
+            Wyświetlamy go tylko, gdy widok jest INNY niż 'kanban'. */}
+        {taskView !== 'kanban' && (
+          isMobile ? (
+            <div className="flex-1 px-4">
+              <select 
+                 value={activeCategoryFilter || 'null'} 
+                 onChange={(e) => setActiveCategoryFilter(e.target.value === 'null' ? null : e.target.value)}
+                className="w-full bg-white dark:bg-zinc-900 border border-gray-300 dark:border-zinc-700 rounded-lg px-3 py-2 text-sm font-bold text-gray-700 dark:text-zinc-300 focus:outline-none focus:border-orange-500"
+              >
+                <option value="null">Wszystkie kategorie</option>
+                {visibleCategories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+              </select>
+            </div>
+          ) : (
+            <div ref={scrollRef} onMouseDown={handleCatMouseDown} onMouseLeave={handleCatMouseLeave} onMouseUp={handleCatMouseUp} onMouseMove={handleCatMouseMove} className="flex-1 flex gap-2 overflow-x-auto hide-scroll cursor-grab active:cursor-grabbing px-4">
+              {visibleCategories.map(cat => (
+                <CatFilterBtn key={cat.id} active={activeCategoryFilter === cat.id} onClick={() => setActiveCategoryFilter(activeCategoryFilter === cat.id ? null : cat.id)} color={getHexColor(cat.color)} label={cat.name} count={getTaskCount(taskView === 'list' ? activeDateFilter : 'all', cat.id)} />
+              ))}
+            </div>
+          )
         )}
+        
+        {/* Wypełniacz pustej przestrzeni. Gdy ukryjemy filtry, ta pusta ramka wypycha przycisk zębatek (ustawień) całkowicie na prawą krawędź ekranu, zachowując spójny layout */}
+        {taskView === 'kanban' && <div className="flex-1"></div>}
 
         <div className="pl-4 border-l border-gray-200 dark:border-zinc-800 shrink-0 relative z-10 bg-gray-50 dark:bg-zinc-950 flex items-center gap-2">
           <button onClick={() => openCategorySettings()} className="p-2 rounded-full text-gray-500 hover:bg-gray-200 dark:hover:bg-zinc-800 transition-colors" title="Zarządzaj kategoriami">
@@ -657,6 +845,7 @@ export default function Tasks({
       </div>
 
       {taskView === 'list' && renderListTaskView()}
+      {taskView === 'kanban' && renderKanbanTaskView()}
       {taskView === 'week' && renderWeekTaskView()}
       {taskView === 'month' && renderMonthTaskView()}
 
@@ -664,11 +853,12 @@ export default function Tasks({
       {!isAddingTask && !isAppMenuOpen && !isCategoryMenuOpen && !focusedTaskId && (
         <>
           <button 
-            onClick={() => setTaskView(prev => prev === 'list' ? 'week' : prev === 'week' ? 'month' : 'list')}
+            // Rozszerzony cykl: Lista -> Kanban -> Harmonogram -> Kalendarz -> Lista
+            onClick={() => setTaskView(prev => prev === 'list' ? 'kanban' : prev === 'kanban' ? 'week' : prev === 'week' ? 'month' : 'list')}
             className="fixed bottom-[5.5rem] right-6 md:right-10 w-10 h-10 bg-white dark:bg-zinc-800 border border-gray-200 dark:border-zinc-700 text-gray-600 dark:text-zinc-300 rounded-full flex items-center justify-center text-lg shadow-lg hover:scale-105 transition-all z-[80]"
-            title={`Zmień widok (${data.settings.hotkeys?.viewList}/${data.settings.hotkeys?.viewWeek}/${data.settings.hotkeys?.viewMonth})`}
+            title={`Zmień widok (${data.settings.hotkeys?.viewList}/${data.settings.hotkeys?.viewKanban}/${data.settings.hotkeys?.viewWeek}/${data.settings.hotkeys?.viewMonth})`}
           >
-            📅
+            👁️
           </button>
 
           <div className="fixed bottom-8 right-4 md:right-8 flex items-center gap-3 z-[80] pointer-events-none transition-all">
